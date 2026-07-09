@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>バイト勤怠QRシステム</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+            text-align: center;
+            background-color: #f4f6f9;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+        .container {
+            max-width: 400px;
+            margin: 30px auto;
+            background: white;
+            padding: 30px;
+            border-radius: 16px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+        }
+        h1 { font-size: 20px; margin-bottom: 15px; color: #111; }
+        p { font-size: 14px; color: #666; line-height: 1.5; }
+        input[type="text"], input[type="file"] {
+            width: 100%;
+            padding: 12px;
+            font-size: 16px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            margin-bottom: 20px;
+            box-sizing: border-box;
+        }
+        input[type="file"] {
+            background: #fafafa;
+            cursor: pointer;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 14px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            width: 100%;
+            transition: background 0.2s;
+        }
+        button:hover { background-color: #0056b3; }
+        .qr-image {
+            max-width: 100%;
+            height: auto;
+            margin-top: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .info-box {
+            background-color: #fff3cd;
+            color: #856404;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 14px;
+            text-align: left;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div id="setup-view" style="display: none;">
+        <h1>従業員情報の登録・変更</h1>
+        <p>登録すると、次回から出退勤タグにかざすだけでQRコードが表示されます。</p>
+        
+        <label style="display:block; text-align:left; margin-bottom:5px; font-weight:bold;">お名前</label>
+        <input type="text" id="employee-name" placeholder="例：山田 太郎">
+        
+        <label style="display:block; text-align:left; margin-bottom:5px; font-weight:bold;">QRコード画像を選択</label>
+        <input type="file" id="qr-file" accept="image/*">
+        <p style="font-size:12px; margin-top:-15px; margin-bottom:20px; text-align:left;">※QRコード部分をスクショなどで小さく切り抜いた（トリミングした）画像を選ぶとスムーズです。</p>
+        
+        <button onclick="saveSettings()">登録を保存する</button>
+    </div>
+
+    <div id="qr-view" style="display: none;">
+        <h1 id="welcome-message">こんにちは</h1>
+        <div id="qr-container"></div>
+    </div>
+
+    <div id="no-data-view" style="display: none;">
+        <h1>未登録です</h1>
+        <div class="info-box">
+            まだあなたのQRコードが登録されていません。マニュアルの横にある「登録用タグ」にスマホをかざして登録を行ってください。
+        </div>
+    </div>
+</div>
+
+<script>
+    // URLのパラメータを取得 (?mode=setup など)
+    const urlParams = new URLSearchParams(window.location.search);
+    const mode = urlParams.get('mode');
+
+    window.onload = function() {
+        const savedName = localStorage.getItem('attendance_name');
+        const savedFormat = localStorage.getItem('attendance_qr_format'); // png/jpegなど
+        const savedBlob = localStorage.getItem('attendance_qr_blob'); // base64データ
+
+        // 「mode=setup」のパラメータがある場合は強制的に設定画面へ
+        if (mode === 'setup') {
+            if (savedName) document.getElementById('employee-name').value = savedName;
+            showSetup();
+        } 
+        // 通常アクセス時
+        else {
+            if (savedName && savedBlob) {
+                showQR(savedName, savedFormat, savedBlob);
+            } else {
+                document.getElementById('no-data-view').style.display = 'block';
+            }
+        }
+    };
+
+    function showSetup() {
+        document.getElementById('setup-view').style.display = 'block';
+        document.getElementById('qr-view').style.display = 'none';
+        document.getElementById('no-data-view').style.display = 'none';
+    }
+
+    function showQR(name, format, blob) {
+        document.getElementById('setup-view').style.display = 'none';
+        document.getElementById('qr-view').style.display = 'block';
+        document.getElementById('no-data-view').style.display = 'none';
+        
+        document.getElementById('welcome-message').innerText = name + " さんのQRコード";
+        const qrContainer = document.getElementById('qr-container');
+        qrContainer.innerHTML = `<img src="data:${format};base64,${blob}" class="qr-image" alt="勤怠QRコード">`;
+    }
+
+    // 画像ファイルをBase64テキストに変換してLocalStorageに保存
+    function saveSettings() {
+        const name = document.getElementById('employee-name').value.trim();
+        const fileInput = document.getElementById('qr-file');
+
+        if (!name) {
+            alert('お名前を入力してください。');
+            return;
+        }
+
+        // すでに保存されていて、新しいファイルが選択されていない場合は名前だけ更新
+        if (fileInput.files.length === 0) {
+            if (localStorage.getItem('attendance_qr_blob')) {
+                localStorage.setItem('attendance_name', name);
+                alert('名前を更新しました。');
+                window.location.href = window.location.pathname; // パラメータを消してリロード
+                return;
+            } else {
+                alert('QRコードの画像を選択してください。');
+                return;
+            }
+        }
+
+        const file = fileInput.files[0];
+        const format = file.type;
+        const reader = new FileReader();
+
+        reader.onload = function(e) {
+            const base64String = e.target.result.split(',')[1]; // 純粋なbase64部分のみ抽出
+            
+            try {
+                localStorage.setItem('attendance_name', name);
+                localStorage.setItem('attendance_qr_format', format);
+                localStorage.setItem('attendance_qr_blob', base64String);
+                
+                alert('登録が完了しました！');
+                window.location.href = window.location.pathname; // パラメータを消してリロード（表示モードへ）
+            } catch (error) {
+                alert('エラー：画像サイズが大きすぎます。QRコードの部分だけをスクリーンショットなどで小さく切り抜いた画像を使用してください。');
+            }
+        };
+
+        reader.readAsDataURL(file);
+    }
+</script>
+
+</body>
+</html>
