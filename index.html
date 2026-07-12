@@ -4,107 +4,28 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>バイト勤怠QRシステム</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-            text-align: center;
-            background-color: #f4f6f9;
-            margin: 0;
-            padding: 20px;
-            color: #333;
-        }
-        .container {
-            max-width: 400px;
-            margin: 20px auto;
-            background: white;
-            padding: 25px;
-            border-radius: 16px;
-            box-shadow: 0 4px 16px rgba(0,0,0,0.08);
-        }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; text-align: center; background-color: #f4f6f9; margin: 0; padding: 20px; color: #333; }
+        .container { max-width: 400px; margin: 20px auto; background: white; padding: 25px; border-radius: 16px; box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
         h1 { font-size: 18px; margin-bottom: 15px; color: #111; }
         p { font-size: 14px; color: #666; line-height: 1.5; margin-top: 0; }
-        
-        /* 入力フォーム関連 */
         label { display: block; text-align: left; margin-bottom: 5px; font-weight: bold; font-size: 14px; }
-        input[type="text"], input[type="file"] {
-            width: 100%;
-            padding: 12px;
-            font-size: 16px;
-            border-radius: 8px;
-            border: 1px solid #ddd;
-            margin-bottom: 20px;
-            box-sizing: border-box;
-        }
+        input[type="text"], input[type="file"] { width: 100%; padding: 12px; font-size: 16px; border-radius: 8px; border: 1px solid #ddd; margin-bottom: 20px; box-sizing: border-box; }
         input[type="file"] { background: #fafafa; cursor: pointer; }
-        
-        /* ボタン関連 */
-        button {
-            background-color: #007bff;
-            color: white;
-            border: none;
-            padding: 14px;
-            font-size: 16px;
-            font-weight: bold;
-            border-radius: 8px;
-            cursor: pointer;
-            width: 100%;
-            transition: background 0.2s;
-        }
+        .section-divider { margin: 25px 0 20px 0; display: flex; align-items: center; color: #888; font-size: 13px; }
+        .section-divider::before, .section-divider::after { content: ""; flex: 1; height: 1px; background: #eee; margin: 0 10px; }
+        button { background-color: #007bff; color: white; border: none; padding: 14px; font-size: 16px; font-weight: bold; border-radius: 8px; cursor: pointer; width: 100%; transition: background 0.2s; }
         button:hover { background-color: #0056b3; }
-        
-        .sub-btn {
-            background-color: #6c757d;
-            margin-top: 15px;
-            padding: 10px;
-            font-size: 14px;
-        }
+        .sub-btn { background-color: #6c757d; margin-top: 15px; padding: 10px; font-size: 14px; }
         .sub-btn:hover { background-color: #5a6268; }
-        
-        /* QRコード画像表示 */
-        .qr-wrapper {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 200px;
-            margin: 15px 0;
-        }
-        .qr-image {
-            width: 75%;
-            max-width: 100%;
-            height: auto;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.12);
-        }
-        
-        /* サイズ調整スライダー */
-        .slider-container {
-            background: #f8f9fa;
-            padding: 15px;
-            border-radius: 10px;
-            margin-top: 20px;
-            border: 1px solid #eee;
-        }
-        .slider-flex {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-            margin-top: 8px;
-        }
-        .slider-flex input[type="range"] {
-            width: 70%;
-            cursor: pointer;
-        }
-        
-        .info-box {
-            background-color: #fff3cd;
-            color: #856404;
-            padding: 15px;
-            border-radius: 8px;
-            font-size: 14px;
-            text-align: left;
-            margin-bottom: 20px;
-        }
+        .qr-wrapper { display: flex; justify-content: center; align-items: center; min-height: 220px; margin: 15px 0; }
+        #qr-container { width: 75%; margin: 0 auto; }
+        #qr-container img { width: 100% !important; height: auto !important; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.12); display: block; }
+        .slider-container { background: #f8f9fa; padding: 15px; border-radius: 10px; margin-top: 20px; border: 1px solid #eee; }
+        .slider-flex { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 8px; }
+        .slider-flex input[type="range"] { width: 70%; cursor: pointer; }
+        .info-box { background-color: #fff3cd; color: #856404; padding: 15px; border-radius: 8px; font-size: 14px; text-align: left; margin-bottom: 20px; }
     </style>
 </head>
 <body>
@@ -117,11 +38,16 @@
         <label for="employee-name">お名前（ニックネーム可）</label>
         <input type="text" id="employee-name" placeholder="例：山田 太郎">
         
-        <label for="qr-file">QRコード画像を選択</label>
-        <input type="file" id="qr-file" accept="image/*">
-        <p style="font-size:12px; margin-top:-15px; margin-bottom:20px; text-align:left; color:#888;">
-            ※QRコード部分をスクショなどで小さく切り抜いた画像を選ぶとスムーズです。
+        <label for="qr-number" style="color: #007bff;">【おすすめ】紙に書かれた8桁の数字</label>
+        <input type="text" id="qr-number" placeholder="例：00021816">
+        <p style="font-size:12px; margin-top:-15px; margin-bottom:5px; text-align:left; color:#666;">
+            ※そのまま入力してください。システムが自動で打刻機用のQRコード（15桁）に変換して生成します。
         </p>
+        
+        <div class="section-divider">または</div>
+        
+        <label for="qr-file">QRコード画像を選択（写真・スクショ）</label>
+        <input type="file" id="qr-file" accept="image/*">
         
         <button onclick="saveSettings()">登録を保存する</button>
         <button id="cancel-btn" class="sub-btn" onclick="cancelSetup()" style="display:none;">戻る</button>
@@ -129,11 +55,9 @@
 
     <div id="qr-view" style="display: none;">
         <h1 id="welcome-message">こんにちは</h1>
-        
         <div class="qr-wrapper">
-            <div id="qr-container" style="width: 100%;"></div>
+            <div id="qr-container"></div>
         </div>
-        
         <div class="slider-container">
             <label style="text-align:center; margin:0; font-size:13px; color:#555;">QRコードの大きさを調整</label>
             <div class="slider-flex">
@@ -142,8 +66,7 @@
                 <span style="font-size:12px; color:#888;">大きく</span>
             </div>
         </div>
-        
-        <button class="sub-btn" onclick="goToSetup()">名前・画像を変更する</button>
+        <button class="sub-btn" onclick="goToSetup()">名前・QRコードを変更する</button>
     </div>
 
     <div id="no-data-view" style="display: none;">
@@ -161,14 +84,25 @@
 
     window.onload = function() {
         const savedName = localStorage.getItem('attendance_name');
+        const savedType = localStorage.getItem('attendance_qr_type');
+        const savedValue = localStorage.getItem('attendance_qr_value');
         const savedFormat = localStorage.getItem('attendance_qr_format');
         const savedBlob = localStorage.getItem('attendance_qr_blob');
 
         if (mode === 'setup') {
             if (savedName) document.getElementById('employee-name').value = savedName;
             
-            // 【改善点2】すでにデータが登録されている場合のみ「戻る」ボタンを表示する
-            if (savedName && savedBlob) {
+            // 💡 変更画面を開いた時は、元の「8桁の数字」に戻して表示してあげる（親切設計）
+            if (savedType === 'number' && savedValue) {
+                // 15桁で保存されているデータから、先頭の0を取り除いて表示
+                let displayValue = savedValue;
+                if (displayValue.length === 15 && displayValue.startsWith('0000000')) {
+                    displayValue = displayValue.slice(7); // 先頭の0を7個削る
+                }
+                document.getElementById('qr-number').value = displayValue;
+            }
+            
+            if (savedName && (savedValue || savedBlob)) {
                 document.getElementById('cancel-btn').style.display = 'block';
             } else {
                 document.getElementById('cancel-btn').style.display = 'none';
@@ -176,8 +110,9 @@
             showSetup();
         } 
         else {
-            if (savedName && savedBlob) {
-                showQR(savedName, savedFormat, savedBlob);
+            if (savedName && (savedValue || savedBlob)) {
+                const type = savedType || (savedBlob ? 'image' : 'number');
+                showQR(savedName, type, savedValue, savedFormat, savedBlob);
             } else {
                 document.getElementById('no-data-view').style.display = 'block';
             }
@@ -190,7 +125,7 @@
         document.getElementById('no-data-view').style.display = 'none';
     }
 
-    function showQR(name, format, blob) {
+    function showQR(name, type, value, format, blob) {
         document.getElementById('setup-view').style.display = 'none';
         document.getElementById('qr-view').style.display = 'block';
         document.getElementById('no-data-view').style.display = 'none';
@@ -198,46 +133,43 @@
         document.getElementById('welcome-message').innerText = name + " さんのQRコード";
         
         const qrContainer = document.getElementById('qr-container');
-        qrContainer.innerHTML = `<img src="data:${format};base64,${blob}" class="qr-image" id="target-qr" alt="勤怠QRコード">`;
+        qrContainer.innerHTML = '';
+        
+        if (type === 'number') {
+            new QRCode(qrContainer, {
+                text: value,
+                width: 256,
+                height: 256,
+                correctLevel: QRCode.CorrectLevel.H
+            });
+        } else {
+            qrContainer.innerHTML = `<img src="data:${format};base64,${blob}" alt="勤怠QRコード">`;
+        }
         
         const savedSize = localStorage.getItem('attendance_qr_size') || '75';
         document.getElementById('size-slider').value = savedSize;
-        document.getElementById('target-qr').style.width = savedSize + '%';
+        qrContainer.style.width = savedSize + '%';
     }
 
     function goToSetup() {
-        const savedName = localStorage.getItem('attendance_name');
-        if (savedName) document.getElementById('employee-name').value = savedName;
-        
-        document.getElementById('cancel-btn').style.display = 'block';
-        showSetup();
+        window.location.href = window.location.pathname + "?mode=setup";
     }
 
     function cancelSetup() {
-        const savedName = localStorage.getItem('attendance_name');
-        const savedFormat = localStorage.getItem('attendance_qr_format');
-        const savedBlob = localStorage.getItem('attendance_qr_blob');
-        
-        // 万が一データがない状態でキャンセルが呼ばれた場合は未登録画面へ
-        if (savedName && savedBlob) {
-            showQR(savedName, savedFormat, savedBlob);
-        } else {
-            document.getElementById('setup-view').style.display = 'none';
-            document.getElementById('qr-view').style.display = 'none';
-            document.getElementById('no-data-view').style.display = 'block';
-        }
+        window.location.href = window.location.pathname;
     }
 
     function changeSize(value) {
-        const qrImg = document.getElementById('target-qr');
-        if (qrImg) {
-            qrImg.style.width = value + '%';
+        const qrContainer = document.getElementById('qr-container');
+        if (qrContainer) {
+            qrContainer.style.width = value + '%';
         }
         localStorage.setItem('attendance_qr_size', value);
     }
 
     function saveSettings() {
         const name = document.getElementById('employee-name').value.trim();
+        const numberInput = document.getElementById('qr-number').value.trim();
         const fileInput = document.getElementById('qr-file');
 
         if (!name) {
@@ -245,47 +177,69 @@
             return;
         }
 
-        if (fileInput.files.length === 0) {
-            if (localStorage.getItem('attendance_qr_blob')) {
-                localStorage.setItem('attendance_name', name);
-                alert('名前を更新しました。');
-                finishSetup();
-                return;
-            } else {
-                alert('QRコードの画像を選択してください。');
-                return;
-            }
+        // 1. 数字が入力されている場合（ここで15桁の最適化を行う）
+        if (numberInput) {
+            // 数字以外の文字（空白など）を念のため取り除く
+            let cleanNumber = numberInput.replace(/[^0-9]/g, '');
+            
+            // 💡 【重要】自動パディング処理：15桁になるまで先頭を0で埋める
+            // 例： "00021816" を入力 → "000000000021816" に自動変換される
+            let formattedNumber = cleanNumber.padStart(15, '0');
+
+            localStorage.setItem('attendance_name', name);
+            localStorage.setItem('attendance_qr_type', 'number');
+            // スマホの記憶領域には、15桁になった完成形のデータを保存する
+            localStorage.setItem('attendance_qr_value', formattedNumber);
+            
+            localStorage.removeItem('attendance_qr_blob');
+            localStorage.removeItem('attendance_qr_format');
+            
+            alert('数字からQRコードを自動生成して登録しました！');
+            finishSetup();
+            return;
         }
 
-        const file = fileInput.files[0];
-        const format = file.type;
-        const reader = new FileReader();
-
-        reader.onload = function(e) {
-            const base64String = e.target.result.split(',')[1];
-            try {
-                localStorage.setItem('attendance_name', name);
-                localStorage.setItem('attendance_qr_format', format);
-                localStorage.setItem('attendance_qr_blob', base64String);
-                
-                alert('登録が完了しました！');
-                finishSetup();
-            } catch (error) {
-                alert('エラー：画像サイズが大きすぎます。QRコードの部分だけをスクリーンショットなどで小さく切り抜いた画像を使用してください。');
+        if (fileInput.files.length > 0) {
+            const file = fileInput.files[0];
+            if (file.size > 3 * 1024 * 1024) {
+                alert('エラー：画像サイズが大きすぎます（3MB上限）。QRコードの部分だけを四角く切り抜いて、ファイルサイズを小さくしてから再度お試しください。');
+                return;
             }
-        };
-        reader.readAsDataURL(file);
+
+            const format = file.type;
+            const reader = new FileReader();
+
+            reader.onload = function(e) {
+                const base64String = e.target.result.split(',')[1];
+                try {
+                    localStorage.setItem('attendance_name', name);
+                    localStorage.setItem('attendance_qr_type', 'image');
+                    localStorage.setItem('attendance_qr_blob', base64String);
+                    localStorage.setItem('attendance_qr_format', format);
+                    localStorage.removeItem('attendance_qr_value');
+                    
+                    alert('画像で登録が完了しました！');
+                    finishSetup();
+                } catch (error) {
+                    alert('エラー：保存に失敗しました。画像サイズを小さくして再度お試しください。');
+                }
+            };
+            reader.readAsDataURL(file);
+            return;
+        }
+
+        if (localStorage.getItem('attendance_qr_blob') || localStorage.getItem('attendance_qr_value')) {
+            localStorage.setItem('attendance_name', name);
+            alert('名前を更新しました。');
+            finishSetup();
+            return;
+        }
+
+        alert('QRコードの下の数字を入力するか、または画像を選択してください。');
     }
 
     function finishSetup() {
-        if (window.location.search) {
-            window.location.href = window.location.pathname;
-        } else {
-            const savedName = localStorage.getItem('attendance_name');
-            const savedFormat = localStorage.getItem('attendance_qr_format');
-            const savedBlob = localStorage.getItem('attendance_qr_blob');
-            showQR(savedName, savedFormat, savedBlob);
-        }
+        window.location.href = window.location.pathname;
     }
 </script>
 
