@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>バイト勤怠QRシステム</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; text-align: center; background-color: #f4f6f9; margin: 0; padding: 20px; color: #333; }
         .container { max-width: 400px; margin: 20px auto; background: white; padding: 25px; border-radius: 16px; box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
@@ -38,16 +39,19 @@
         <label for="employee-name">お名前（ニックネーム可）</label>
         <input type="text" id="employee-name" placeholder="例：山田 太郎">
         
-        <label for="qr-number">QRコード下に書かれた8桁の数字</label>
-        <input type="text" id="qr-number" placeholder="例：00012345">
+        <label for="qr-file" style="color: #007bff;">【一番かんたん】QRコードの写真をえらぶ</label>
+        <input type="file" id="qr-file" accept="image/*">
         <p style="font-size:12px; margin-top:-15px; margin-bottom:5px; text-align:left; color:#666;">
-            ※数字からシステムが自動で打刻機用に最適化されたQRコードに変換して生成します。
+            ※写真をえらぶだけで、システムが自動で綺麗なQRコードを作成します。
         </p>
         
-        <div class="section-divider">または</div>
+        <div class="section-divider">または（写真がうまくいかない場合）</div>
         
-        <label for="qr-file">QRコード画像を選択（写真・スクショ）</label>
-        <input type="file" id="qr-file" accept="image/*">
+        <label for="qr-number">QRコード下に書かれた8桁の数字</label>
+        <input type="text" id="qr-number" placeholder="例：00012345">
+        <p style="font-size:12px; margin-top:-15px; margin-bottom:20px; text-align:left; color:#666;">
+            ※数字からシステムが自動で打刻機用に最適化されたQRコードに変換して生成します。
+        </p>
         
         <button onclick="saveSettings()">登録を保存する</button>
         <button id="cancel-btn" class="sub-btn" onclick="cancelSetup()" style="display:none;">戻る</button>
@@ -84,25 +88,23 @@
 
     window.onload = function() {
         const savedName = localStorage.getItem('attendance_name');
-        const savedType = localStorage.getItem('attendance_qr_type');
-        const savedValue = localStorage.getItem('attendance_qr_value');
-        const savedFormat = localStorage.getItem('attendance_qr_format');
-        const savedBlob = localStorage.getItem('attendance_qr_blob');
+        const savedValue = localStorage.getItem('attendance_qr_value'); // 15桁の数字データ
+
+        // 💡 写真の自動解析処理イベントを設定
+        document.getElementById('qr-file').addEventListener('change', handleFileSelect);
 
         if (mode === 'setup') {
             if (savedName) document.getElementById('employee-name').value = savedName;
             
-            // 💡 変更画面を開いた時は、元の「8桁の数字」に戻して表示してあげる（親切設計）
-            if (savedType === 'number' && savedValue) {
-                // 15桁で保存されているデータから、先頭の0を取り除いて表示
+            if (savedValue) {
                 let displayValue = savedValue;
                 if (displayValue.length === 15 && displayValue.startsWith('0000000')) {
-                    displayValue = displayValue.slice(7); // 先頭の0を7個削る
+                    displayValue = displayValue.slice(7);
                 }
                 document.getElementById('qr-number').value = displayValue;
             }
             
-            if (savedName && (savedValue || savedBlob)) {
+            if (savedName && savedValue) {
                 document.getElementById('cancel-btn').style.display = 'block';
             } else {
                 document.getElementById('cancel-btn').style.display = 'none';
@@ -110,14 +112,52 @@
             showSetup();
         } 
         else {
-            if (savedName && (savedValue || savedBlob)) {
-                const type = savedType || (savedBlob ? 'image' : 'number');
-                showQR(savedName, type, savedValue, savedFormat, savedBlob);
+            if (savedName && savedValue) {
+                showQR(savedName, savedValue);
             } else {
                 document.getElementById('no-data-view').style.display = 'block';
             }
         }
     };
+
+    // 💡 新機能：選択された写真をその場でスキャンして数字を自動入力する処理
+    function handleFileSelect(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            const img = new Image();
+            img.onload = function() {
+                // 画像を解析用のキャンバスに描画
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                ctx.drawImage(img, 0, 0);
+                
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                // jsQRライブラリで画像からQRコードをデコード
+                const code = jsQR(imageData.data, imageData.width, imageData.height);
+                
+                if (code) {
+                    let cleanNumber = code.data.replace(/[^0-9]/g, '');
+                    // 15桁の打刻データから、画面表示用に下8桁を切り出す
+                    if (cleanNumber.length === 15 && cleanNumber.startsWith('0000000')) {
+                        document.getElementById('qr-number').value = cleanNumber.slice(7);
+                    } else {
+                        document.getElementById('qr-number').value = cleanNumber;
+                    }
+                    alert('🎉 写真からQRコードの自動読み取りに成功しました！「8桁の数字」が自動入力されました。');
+                } else {
+                    alert('⚠️ 写真からQRコードを読み取れませんでした。光の反射やピントのボケが原因かもしれません。\n\nお手数ですが、下の入力欄に「8桁の数字」を直接手入力してください。');
+                    e.target.value = ''; // 選択をクリア
+                }
+            };
+            img.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+    }
 
     function showSetup() {
         document.getElementById('setup-view').style.display = 'block';
@@ -125,7 +165,7 @@
         document.getElementById('no-data-view').style.display = 'none';
     }
 
-    function showQR(name, type, value, format, blob) {
+    function showQR(name, value) {
         document.getElementById('setup-view').style.display = 'none';
         document.getElementById('qr-view').style.display = 'block';
         document.getElementById('no-data-view').style.display = 'none';
@@ -135,16 +175,13 @@
         const qrContainer = document.getElementById('qr-container');
         qrContainer.innerHTML = '';
         
-        if (type === 'number') {
-            new QRCode(qrContainer, {
-                text: value,
-                width: 256,
-                height: 256,
-                correctLevel: QRCode.CorrectLevel.L
-            });
-        } else {
-            qrContainer.innerHTML = `<img src="data:${format};base64,${blob}" alt="勤怠QRコード">`;
-        }
+        // 常に完璧に綺麗なデジタルQRを生成（サイズ162, レベルL）
+        new QRCode(qrContainer, {
+            text: value,
+            width: 162,
+            height: 162,
+            correctLevel: QRCode.CorrectLevel.L
+        });
         
         const savedSize = localStorage.getItem('attendance_qr_size') || '75';
         document.getElementById('size-slider').value = savedSize;
@@ -170,72 +207,27 @@
     function saveSettings() {
         const name = document.getElementById('employee-name').value.trim();
         const numberInput = document.getElementById('qr-number').value.trim();
-        const fileInput = document.getElementById('qr-file');
 
         if (!name) {
             alert('お名前を入力してください。');
             return;
         }
 
-        // 1. 数字が入力されている場合（ここで15桁の最適化を行う）
-        if (numberInput) {
-            // 数字以外の文字（空白など）を念のため取り除く
-            let cleanNumber = numberInput.replace(/[^0-9]/g, '');
-            
-            // 💡 【重要】自動パディング処理：15桁になるまで先頭を0で埋める
-            // 例： "00021816" を入力 → "000000000021816" に自動変換される
-            let formattedNumber = cleanNumber.padStart(15, '0');
-
-            localStorage.setItem('attendance_name', name);
-            localStorage.setItem('attendance_qr_type', 'number');
-            // スマホの記憶領域には、15桁になった完成形のデータを保存する
-            localStorage.setItem('attendance_qr_value', formattedNumber);
-            
-            localStorage.removeItem('attendance_qr_blob');
-            localStorage.removeItem('attendance_qr_format');
-            
-            alert('数字からQRコードを自動生成して登録しました！');
-            finishSetup();
+        if (!numberInput) {
+            alert('写真をえらぶか、または8桁の数字を入力してください。');
             return;
         }
 
-        if (fileInput.files.length > 0) {
-            const file = fileInput.files[0];
-            if (file.size > 3 * 1024 * 1024) {
-                alert('エラー：画像サイズが大きすぎます（3MB上限）。QRコードの部分だけを四角く切り抜いて、ファイルサイズを小さくしてから再度お試しください。');
-                return;
-            }
+        // 入力された数字（自動入力されたもの、または手入力）を15桁に最適化
+        let cleanNumber = numberInput.replace(/[^0-9]/g, '');
+        let formattedNumber = cleanNumber.padStart(15, '0');
 
-            const format = file.type;
-            const reader = new FileReader();
-
-            reader.onload = function(e) {
-                const base64String = e.target.result.split(',')[1];
-                try {
-                    localStorage.setItem('attendance_name', name);
-                    localStorage.setItem('attendance_qr_type', 'image');
-                    localStorage.setItem('attendance_qr_blob', base64String);
-                    localStorage.setItem('attendance_qr_format', format);
-                    localStorage.removeItem('attendance_qr_value');
-                    
-                    alert('画像で登録が完了しました！');
-                    finishSetup();
-                } catch (error) {
-                    alert('エラー：保存に失敗しました。画像サイズを小さくして再度お試しください。');
-                }
-            };
-            reader.readAsDataURL(file);
-            return;
-        }
-
-        if (localStorage.getItem('attendance_qr_blob') || localStorage.getItem('attendance_qr_value')) {
-            localStorage.setItem('attendance_name', name);
-            alert('名前を更新しました。');
-            finishSetup();
-            return;
-        }
-
-        alert('QRコードの下の数字を入力するか、または画像を選択してください。');
+        // 💡 保存するのは「名前」と「15桁の数字」だけ。超軽量！
+        localStorage.setItem('attendance_name', name);
+        localStorage.setItem('attendance_qr_value', formattedNumber);
+        
+        alert('登録が完了しました！');
+        finishSetup();
     }
 
     function finishSetup() {
