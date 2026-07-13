@@ -52,10 +52,10 @@
         <h1>従業員情報の登録・変更</h1>
         <p>登録すると、次回から出退勤タグにかざすだけでQRコードが表示されます。</p>
         
-        <label for="employee-name">お名前（ニックネーム可）</label>
+        <label for="employee-name" style="color: #007bff;">お名前（ニックネーム可）</label>
         <input type="text" id="employee-name" placeholder="例：山田 太郎">
         
-        <label for="qr-file" style="color: #007bff;">【一番かんたん】QRコードの写真をえらぶ</label>
+        <label for="qr-file" style="color: #007bff;">QRコードの写真をえらぶ</label>
         <input type="file" id="qr-file" accept="image/*">
         <label class="checkbox-label">
             <input type="checkbox" id="auto-convert-cb" checked>
@@ -200,7 +200,7 @@
                     }
                     alert('🎉 写真からQRコードの自動読み取りに成功しました！「8桁の数字」が自動入力されました。');
                 } else {
-                    alert('⚠️ 写真からQRコードを読み取れませんでした。\n光の反射やピントのボケが原因かもしれません。\n\nそのままの写真を使いたい場合は「綺麗なQRコードに変換する」のチェックを外すか、下の入力欄に「8桁の数字」を直接手入力してください。');
+                    alert('⚠️ 写真からQRコードを読み取れませんでした。\n光の反射やピントのボケが原因かもしれません。\n\n、下の入力欄に「8桁の数字」を直接手入力してください。また、そのままの写真を使いたい場合は下のチェックを外してください。');
                 }
             };
             img.src = event.target.result;
