@@ -88,9 +88,8 @@
 
     window.onload = function() {
         const savedName = localStorage.getItem('attendance_name');
-        const savedValue = localStorage.getItem('attendance_qr_value'); // 15桁の数字データ
+        const savedValue = localStorage.getItem('attendance_qr_value');
 
-        // 💡 写真の自動解析処理イベントを設定
         document.getElementById('qr-file').addEventListener('change', handleFileSelect);
 
         if (mode === 'setup') {
@@ -120,7 +119,7 @@
         }
     };
 
-    // 💡 新機能：選択された写真をその場でスキャンして数字を自動入力する処理
+    // 💡 変更：画像解析アルゴリズムの最適化（リサイズ処理の導入）
     function handleFileSelect(e) {
         const file = e.target.files[0];
         if (!file) return;
@@ -129,20 +128,46 @@
         reader.onload = function(event) {
             const img = new Image();
             img.onload = function() {
-                // 画像を解析用のキャンバスに描画
+                // スマホのカメラ写真（数千万画素など）は大きすぎて読み取れないため、適正サイズにリサイズする
+                // 縦横の長い方を最大800ピクセルに縮小する
+                const MAX_SIZE = 800;
+                let width = img.width;
+                let height = img.height;
+
+                if (width > height) {
+                    if (width > MAX_SIZE) {
+                        height *= MAX_SIZE / width;
+                        width = MAX_SIZE;
+                    }
+                } else {
+                    if (height > MAX_SIZE) {
+                        width *= MAX_SIZE / height;
+                        height = MAX_SIZE;
+                    }
+                }
+
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
-                canvas.width = img.width;
-                canvas.height = img.height;
-                ctx.drawImage(img, 0, 0);
+                canvas.width = width;
+                canvas.height = height;
+                
+                // キャンバスに縮小描画（これにより余計なノイズや大きすぎるピクセルが滑らかになります）
+                ctx.drawImage(img, 0, 0, width, height);
                 
                 const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                // jsQRライブラリで画像からQRコードをデコード
-                const code = jsQR(imageData.data, imageData.width, imageData.height);
+                let code = jsQR(imageData.data, imageData.width, imageData.height);
+                
+                // 💡 もし縮小して読めなかった場合、念のためオリジナルサイズでもう一度だけアタック
+                if (!code && (img.width !== width)) {
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    ctx.drawImage(img, 0, 0);
+                    const originalData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    code = jsQR(originalData.data, originalData.width, originalData.height);
+                }
                 
                 if (code) {
                     let cleanNumber = code.data.replace(/[^0-9]/g, '');
-                    // 15桁の打刻データから、画面表示用に下8桁を切り出す
                     if (cleanNumber.length === 15 && cleanNumber.startsWith('0000000')) {
                         document.getElementById('qr-number').value = cleanNumber.slice(7);
                     } else {
@@ -151,7 +176,7 @@
                     alert('🎉 写真からQRコードの自動読み取りに成功しました！「8桁の数字」が自動入力されました。');
                 } else {
                     alert('⚠️ 写真からQRコードを読み取れませんでした。光の反射やピントのボケが原因かもしれません。\n\nお手数ですが、下の入力欄に「8桁の数字」を直接手入力してください。');
-                    e.target.value = ''; // 選択をクリア
+                    e.target.value = '';
                 }
             };
             img.src = event.target.result;
@@ -175,7 +200,6 @@
         const qrContainer = document.getElementById('qr-container');
         qrContainer.innerHTML = '';
         
-        // 常に完璧に綺麗なデジタルQRを生成（サイズ162, レベルL）
         new QRCode(qrContainer, {
             text: value,
             width: 162,
@@ -218,11 +242,9 @@
             return;
         }
 
-        // 入力された数字（自動入力されたもの、または手入力）を15桁に最適化
         let cleanNumber = numberInput.replace(/[^0-9]/g, '');
         let formattedNumber = cleanNumber.padStart(15, '0');
 
-        // 💡 保存するのは「名前」と「15桁の数字」だけ。超軽量！
         localStorage.setItem('attendance_name', name);
         localStorage.setItem('attendance_qr_value', formattedNumber);
         
