@@ -13,7 +13,7 @@
         p { font-size: 14px; color: #666; line-height: 1.5; margin-top: 0; }
         label { display: block; text-align: left; margin-bottom: 5px; font-weight: bold; font-size: 14px; }
         input[type="text"], input[type="file"] { width: 100%; padding: 12px; font-size: 16px; border-radius: 8px; border: 1px solid #ddd; margin-bottom: 20px; box-sizing: border-box; }
-        input[type="file"] { background: #fafafa; cursor: pointer; }
+        input[type="file"] { background: #fafafa; cursor: pointer; margin-bottom: 5px; }
         .section-divider { margin: 25px 0 20px 0; display: flex; align-items: center; color: #888; font-size: 13px; }
         .section-divider::before, .section-divider::after { content: ""; flex: 1; height: 1px; background: #eee; margin: 0 10px; }
         button { background-color: #007bff; color: white; border: none; padding: 14px; font-size: 16px; font-weight: bold; border-radius: 8px; cursor: pointer; width: 100%; transition: background 0.2s; }
@@ -27,6 +27,22 @@
         .slider-flex { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 8px; }
         .slider-flex input[type="range"] { width: 70%; cursor: pointer; }
         .info-box { background-color: #fff3cd; color: #856404; padding: 15px; border-radius: 8px; font-size: 14px; text-align: left; margin-bottom: 20px; }
+        
+        /* 💡 チェックボックス用のデザイン */
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            font-size: 13px;
+            font-weight: normal;
+            color: #555;
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+        .checkbox-label input[type="checkbox"] {
+            width: auto;
+            margin: 0 8px 0 0;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -41,16 +57,17 @@
         
         <label for="qr-file" style="color: #007bff;">【一番かんたん】QRコードの写真をえらぶ</label>
         <input type="file" id="qr-file" accept="image/*">
-        <p style="font-size:12px; margin-top:-15px; margin-bottom:5px; text-align:left; color:#666;">
-            ※写真をえらぶだけで、システムが自動で綺麗なQRコードを作成します。
-        </p>
+        <label class="checkbox-label">
+            <input type="checkbox" id="auto-convert-cb" checked>
+            写真から綺麗なQRコードに変換する（推奨）
+        </label>
         
         <div class="section-divider">または（写真がうまくいかない場合）</div>
         
         <label for="qr-number">QRコード下に書かれた8桁の数字</label>
         <input type="text" id="qr-number" placeholder="例：00012345">
         <p style="font-size:12px; margin-top:-15px; margin-bottom:20px; text-align:left; color:#666;">
-            ※数字からシステムが自動で打刻機用に最適化されたQRコードに変換して生成します。
+            ※数字から、システムが自動で綺麗なQRコードを作成します。
         </p>
         
         <button onclick="saveSettings()">登録を保存する</button>
@@ -88,14 +105,28 @@
 
     window.onload = function() {
         const savedName = localStorage.getItem('attendance_name');
+        const savedType = localStorage.getItem('attendance_qr_type'); // 'image' or 'number'
         const savedValue = localStorage.getItem('attendance_qr_value');
+        const savedFormat = localStorage.getItem('attendance_qr_format');
+        const savedBlob = localStorage.getItem('attendance_qr_blob');
 
-        document.getElementById('qr-file').addEventListener('change', handleFileSelect);
+        // イベントリスナーの設定
+        const fileInput = document.getElementById('qr-file');
+        const autoConvertCb = document.getElementById('auto-convert-cb');
+        
+        fileInput.addEventListener('change', handleFileSelect);
+        
+        // 💡 チェックボックスをONにした時に、すでに写真が選ばれていたら再スキャンする
+        autoConvertCb.addEventListener('change', function(e) {
+            if (e.target.checked && fileInput.files.length > 0) {
+                handleFileSelect({ target: fileInput });
+            }
+        });
 
         if (mode === 'setup') {
             if (savedName) document.getElementById('employee-name').value = savedName;
             
-            if (savedValue) {
+            if (savedType === 'number' && savedValue) {
                 let displayValue = savedValue;
                 if (displayValue.length === 15 && displayValue.startsWith('0000000')) {
                     displayValue = displayValue.slice(7);
@@ -103,7 +134,7 @@
                 document.getElementById('qr-number').value = displayValue;
             }
             
-            if (savedName && savedValue) {
+            if (savedName && (savedValue || savedBlob)) {
                 document.getElementById('cancel-btn').style.display = 'block';
             } else {
                 document.getElementById('cancel-btn').style.display = 'none';
@@ -111,53 +142,47 @@
             showSetup();
         } 
         else {
-            if (savedName && savedValue) {
-                showQR(savedName, savedValue);
+            if (savedName && (savedValue || savedBlob)) {
+                const type = savedType || (savedBlob ? 'image' : 'number');
+                showQR(savedName, type, savedValue, savedFormat, savedBlob);
             } else {
                 document.getElementById('no-data-view').style.display = 'block';
             }
         }
     };
 
-    // 💡 変更：画像解析アルゴリズムの最適化（リサイズ処理の導入）
     function handleFileSelect(e) {
         const file = e.target.files[0];
         if (!file) return;
+
+        // 💡 チェックが外れている場合は、読み取り（スキャン）処理をスキップしてそのままにする
+        if (!document.getElementById('auto-convert-cb').checked) {
+            return;
+        }
 
         const reader = new FileReader();
         reader.onload = function(event) {
             const img = new Image();
             img.onload = function() {
-                // スマホのカメラ写真（数千万画素など）は大きすぎて読み取れないため、適正サイズにリサイズする
-                // 縦横の長い方を最大800ピクセルに縮小する
                 const MAX_SIZE = 800;
                 let width = img.width;
                 let height = img.height;
 
                 if (width > height) {
-                    if (width > MAX_SIZE) {
-                        height *= MAX_SIZE / width;
-                        width = MAX_SIZE;
-                    }
+                    if (width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE; }
                 } else {
-                    if (height > MAX_SIZE) {
-                        width *= MAX_SIZE / height;
-                        height = MAX_SIZE;
-                    }
+                    if (height > MAX_SIZE) { width *= MAX_SIZE / height; height = MAX_SIZE; }
                 }
 
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
                 canvas.width = width;
                 canvas.height = height;
-                
-                // キャンバスに縮小描画（これにより余計なノイズや大きすぎるピクセルが滑らかになります）
                 ctx.drawImage(img, 0, 0, width, height);
                 
                 const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                 let code = jsQR(imageData.data, imageData.width, imageData.height);
                 
-                // 💡 もし縮小して読めなかった場合、念のためオリジナルサイズでもう一度だけアタック
                 if (!code && (img.width !== width)) {
                     canvas.width = img.width;
                     canvas.height = img.height;
@@ -175,8 +200,7 @@
                     }
                     alert('🎉 写真からQRコードの自動読み取りに成功しました！「8桁の数字」が自動入力されました。');
                 } else {
-                    alert('⚠️ 写真からQRコードを読み取れませんでした。光の反射やピントのボケが原因かもしれません。\n\nお手数ですが、下の入力欄に「8桁の数字」を直接手入力してください。');
-                    e.target.value = '';
+                    alert('⚠️ 写真からQRコードを読み取れませんでした。\n光の反射やピントのボケが原因かもしれません。\n\nそのままの写真を使いたい場合は「綺麗なQRコードに変換する」のチェックを外すか、下の入力欄に「8桁の数字」を直接手入力してください。');
                 }
             };
             img.src = event.target.result;
@@ -190,22 +214,26 @@
         document.getElementById('no-data-view').style.display = 'none';
     }
 
-    function showQR(name, value) {
+    function showQR(name, type, value, format, blob) {
         document.getElementById('setup-view').style.display = 'none';
         document.getElementById('qr-view').style.display = 'block';
         document.getElementById('no-data-view').style.display = 'none';
         
         document.getElementById('welcome-message').innerText = name + " さんのQRコード";
-        
         const qrContainer = document.getElementById('qr-container');
         qrContainer.innerHTML = '';
         
-        new QRCode(qrContainer, {
-            text: value,
-            width: 162,
-            height: 162,
-            correctLevel: QRCode.CorrectLevel.L
-        });
+        // 💡 保存されたデータのタイプによって表示を分ける
+        if (type === 'image') {
+            qrContainer.innerHTML = `<img src="data:${format};base64,${blob}" alt="勤怠QRコード">`;
+        } else {
+            new QRCode(qrContainer, {
+                text: value,
+                width: 162,
+                height: 162,
+                correctLevel: QRCode.CorrectLevel.L
+            });
+        }
         
         const savedSize = localStorage.getItem('attendance_qr_size') || '75';
         document.getElementById('size-slider').value = savedSize;
@@ -231,25 +259,67 @@
     function saveSettings() {
         const name = document.getElementById('employee-name').value.trim();
         const numberInput = document.getElementById('qr-number').value.trim();
+        const fileInput = document.getElementById('qr-file');
+        const isAutoConvert = document.getElementById('auto-convert-cb').checked;
 
         if (!name) {
             alert('お名前を入力してください。');
             return;
         }
 
-        if (!numberInput) {
-            alert('写真をえらぶか、または8桁の数字を入力してください。');
+        // 💡 【パターン1】チェックが外れていて、写真が選ばれている場合（オリジナルの画像をそのまま保存）
+        if (!isAutoConvert && fileInput.files.length > 0) {
+            const file = fileInput.files[0];
+            if (file.size > 3 * 1024 * 1024) {
+                alert('エラー：画像サイズが大きすぎます（3MB上限）。QRコードの部分だけを四角く切り抜いて、ファイルサイズを小さくしてから再度お試しください。');
+                return;
+            }
+            const format = file.type;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const base64String = e.target.result.split(',')[1];
+                try {
+                    localStorage.setItem('attendance_name', name);
+                    localStorage.setItem('attendance_qr_type', 'image');
+                    localStorage.setItem('attendance_qr_blob', base64String);
+                    localStorage.setItem('attendance_qr_format', format);
+                    localStorage.removeItem('attendance_qr_value'); // 数字データは消す
+                    
+                    alert('オリジナルの写真で登録が完了しました！');
+                    finishSetup();
+                } catch (error) {
+                    alert('エラー：保存に失敗しました。画像サイズを小さくして再度お試しください。');
+                }
+            };
+            reader.readAsDataURL(file);
             return;
         }
 
-        let cleanNumber = numberInput.replace(/[^0-9]/g, '');
-        let formattedNumber = cleanNumber.padStart(15, '0');
+        // 💡 【パターン2】チェックがONになっているか、数字が直接入力されている場合
+        if (numberInput) {
+            let cleanNumber = numberInput.replace(/[^0-9]/g, '');
+            let formattedNumber = cleanNumber.padStart(15, '0');
 
-        localStorage.setItem('attendance_name', name);
-        localStorage.setItem('attendance_qr_value', formattedNumber);
-        
-        alert('登録が完了しました！');
-        finishSetup();
+            localStorage.setItem('attendance_name', name);
+            localStorage.setItem('attendance_qr_type', 'number');
+            localStorage.setItem('attendance_qr_value', formattedNumber);
+            localStorage.removeItem('attendance_qr_blob'); // 画像データは消す
+            localStorage.removeItem('attendance_qr_format');
+            
+            alert('登録が完了しました！');
+            finishSetup();
+            return;
+        }
+
+        // 更新時（すでにデータがある場合）の処理
+        if (localStorage.getItem('attendance_qr_blob') || localStorage.getItem('attendance_qr_value')) {
+            localStorage.setItem('attendance_name', name);
+            alert('名前を更新しました。');
+            finishSetup();
+            return;
+        }
+
+        alert('写真をえらぶか、または8桁の数字を入力してください。');
     }
 
     function finishSetup() {
