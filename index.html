@@ -28,31 +28,44 @@
         .slider-flex input[type="range"] { width: 70%; cursor: pointer; }
         .info-box { background-color: #fff3cd; color: #856404; padding: 15px; border-radius: 8px; font-size: 14px; text-align: left; margin-bottom: 20px; }
         
-        /* 💡 チェックボックス用のデザイン */
-        .checkbox-label {
-            display: flex;
-            align-items: center;
-            font-size: 13px;
-            font-weight: normal;
-            color: #555;
-            cursor: pointer;
-            margin-bottom: 20px;
+        .checkbox-label { display: flex; align-items: center; font-size: 13px; font-weight: normal; color: #555; cursor: pointer; margin-bottom: 20px; }
+        .checkbox-label input[type="checkbox"] { width: auto; margin: 0 8px 0 0; cursor: pointer; }
+
+        /* 💡 追加：自作ポップアップ（モーダル）のデザイン */
+        #custom-modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6);
+            display: none; justify-content: center; align-items: center;
+            z-index: 9999;
+            opacity: 0; transition: opacity 0.2s;
         }
-        .checkbox-label input[type="checkbox"] {
-            width: auto;
-            margin: 0 8px 0 0;
-            cursor: pointer;
+        #custom-modal-box {
+            background: white; padding: 30px 20px; border-radius: 16px;
+            width: 85%; max-width: 320px; text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            transform: translateY(20px); transition: transform 0.2s;
         }
+        #custom-modal-title { margin: 0 0 10px 0; font-size: 22px; }
+        #custom-modal-message { font-size: 14px; color: #555; line-height: 1.6; margin-bottom: 25px; }
+        #custom-modal-btn { background-color: #007bff; width: 80%; padding: 12px; font-size: 15px; }
     </style>
 </head>
 <body>
 
+<div id="custom-modal-overlay">
+    <div id="custom-modal-box">
+        <h2 id="custom-modal-title">タイトル</h2>
+        <p id="custom-modal-message">メッセージ</p>
+        <button id="custom-modal-btn" onclick="closeModal()">OK</button>
+    </div>
+</div>
+
 <div class="container">
-    <div id="setup-view" style="display: none;">
+    <div id="setup-view" style="display: none;" style="color: #007bff;">
         <h1>従業員情報の登録・変更</h1>
         <p>登録すると、次回から出退勤タグにかざすだけでQRコードが表示されます。</p>
         
-        <label for="employee-name" style="color: #007bff;">お名前（ニックネーム可）</label>
+        <label for="employee-name">お名前（ニックネーム可）</label>
         <input type="text" id="employee-name" placeholder="例：山田 太郎">
         
         <label for="qr-file" style="color: #007bff;">QRコードの写真をえらぶ</label>
@@ -67,7 +80,7 @@
         <label for="qr-number">QRコード下に書かれた8桁の数字</label>
         <input type="text" id="qr-number" placeholder="例：00012345">
         <p style="font-size:12px; margin-top:-15px; margin-bottom:20px; text-align:left; color:#666;">
-            ※数字から、システムが自動で綺麗なQRコードを作成します。
+            ※数字からシステムが自動で打刻機用に最適化されたQRコードに変換して生成します。
         </p>
         
         <button onclick="saveSettings()">登録を保存する</button>
@@ -103,20 +116,57 @@
     const urlParams = new URLSearchParams(window.location.search);
     const mode = urlParams.get('mode');
 
+    // 💡 追加：自作ポップアップを制御するプログラム
+    let modalCallback = null; // OKを押した後に実行する処理を記憶する変数
+
+    function showModal(title, message, isSuccess, callback) {
+        const titleEl = document.getElementById('custom-modal-title');
+        titleEl.innerText = title;
+        // 成功なら緑、エラーなら赤に文字色を変更
+        titleEl.style.color = isSuccess ? '#28a745' : '#dc3545';
+        
+        document.getElementById('custom-modal-message').innerHTML = message;
+        
+        const overlay = document.getElementById('custom-modal-overlay');
+        const box = document.getElementById('custom-modal-box');
+        
+        overlay.style.display = 'flex';
+        // ふわっと表示させるための少しの遅延処理
+        setTimeout(() => {
+            overlay.style.opacity = '1';
+            box.style.transform = 'translateY(0)';
+        }, 10);
+        
+        modalCallback = callback || null;
+    }
+
+    function closeModal() {
+        const overlay = document.getElementById('custom-modal-overlay');
+        const box = document.getElementById('custom-modal-box');
+        
+        overlay.style.opacity = '0';
+        box.style.transform = 'translateY(20px)';
+        
+        setTimeout(() => {
+            overlay.style.display = 'none';
+            if (modalCallback) {
+                modalCallback();
+                modalCallback = null;
+            }
+        }, 200);
+    }
+
     window.onload = function() {
         const savedName = localStorage.getItem('attendance_name');
-        const savedType = localStorage.getItem('attendance_qr_type'); // 'image' or 'number'
+        const savedType = localStorage.getItem('attendance_qr_type');
         const savedValue = localStorage.getItem('attendance_qr_value');
         const savedFormat = localStorage.getItem('attendance_qr_format');
         const savedBlob = localStorage.getItem('attendance_qr_blob');
 
-        // イベントリスナーの設定
         const fileInput = document.getElementById('qr-file');
         const autoConvertCb = document.getElementById('auto-convert-cb');
         
         fileInput.addEventListener('change', handleFileSelect);
-        
-        // 💡 チェックボックスをONにした時に、すでに写真が選ばれていたら再スキャンする
         autoConvertCb.addEventListener('change', function(e) {
             if (e.target.checked && fileInput.files.length > 0) {
                 handleFileSelect({ target: fileInput });
@@ -155,7 +205,6 @@
         const file = e.target.files[0];
         if (!file) return;
 
-        // 💡 チェックが外れている場合は、読み取り（スキャン）処理をスキップしてそのままにする
         if (!document.getElementById('auto-convert-cb').checked) {
             return;
         }
@@ -198,9 +247,10 @@
                     } else {
                         document.getElementById('qr-number').value = cleanNumber;
                     }
-                    alert('🎉 写真からQRコードの自動読み取りに成功しました！「8桁の数字」が自動入力されました。');
+                    // 💡 alertを自作ポップアップに変更
+                    showModal('読み取り成功！', '🎉 写真からQRコードの自動読み取りに成功しました！<br>「8桁の数字」が自動入力されました。', true);
                 } else {
-                    alert('⚠️ 写真からQRコードを読み取れませんでした。\n光の反射やピントのボケが原因かもしれません。\n\n、下の入力欄に「8桁の数字」を直接手入力してください。また、そのままの写真を使いたい場合は下のチェックを外してください。');
+                    showModal('読み取りエラー', '⚠️ 写真からQRコードを読み取れませんでした。<br>光の反射やピントのボケが原因かもしれません。<br><br>下の入力欄に「8桁の数字」を直接手入力してください。<br>また、そのままの写真を使いたい場合は下のチェックを外してください。', false);
                 }
             };
             img.src = event.target.result;
@@ -223,7 +273,6 @@
         const qrContainer = document.getElementById('qr-container');
         qrContainer.innerHTML = '';
         
-        // 💡 保存されたデータのタイプによって表示を分ける
         if (type === 'image') {
             qrContainer.innerHTML = `<img src="data:${format};base64,${blob}" alt="勤怠QRコード">`;
         } else {
@@ -263,15 +312,14 @@
         const isAutoConvert = document.getElementById('auto-convert-cb').checked;
 
         if (!name) {
-            alert('お名前を入力してください。');
+            showModal('入力エラー', 'お名前を入力してください。', false);
             return;
         }
 
-        // 💡 【パターン1】チェックが外れていて、写真が選ばれている場合（オリジナルの画像をそのまま保存）
         if (!isAutoConvert && fileInput.files.length > 0) {
             const file = fileInput.files[0];
             if (file.size > 3 * 1024 * 1024) {
-                alert('エラー：画像サイズが大きすぎます（3MB上限）。QRコードの部分だけを四角く切り抜いて、ファイルサイズを小さくしてから再度お試しください。');
+                showModal('サイズエラー', '画像サイズが大きすぎます（3MB上限）。<br>QRコードの部分だけを四角く切り抜いて、ファイルサイズを小さくしてから再度お試しください。', false);
                 return;
             }
             const format = file.type;
@@ -283,19 +331,18 @@
                     localStorage.setItem('attendance_qr_type', 'image');
                     localStorage.setItem('attendance_qr_blob', base64String);
                     localStorage.setItem('attendance_qr_format', format);
-                    localStorage.removeItem('attendance_qr_value'); // 数字データは消す
+                    localStorage.removeItem('attendance_qr_value');
                     
-                    alert('オリジナルの写真で登録が完了しました！');
-                    finishSetup();
+                    // 💡 OKボタンが押された後に finishSetup を実行するように設定
+                    showModal('登録完了！', 'オリジナルの写真で登録が完了しました！', true, finishSetup);
                 } catch (error) {
-                    alert('エラー：保存に失敗しました。画像サイズを小さくして再度お試しください。');
+                    showModal('保存エラー', '保存に失敗しました。<br>画像サイズを小さくして再度お試しください。', false);
                 }
             };
             reader.readAsDataURL(file);
             return;
         }
 
-        // 💡 【パターン2】チェックがONになっているか、数字が直接入力されている場合
         if (numberInput) {
             let cleanNumber = numberInput.replace(/[^0-9]/g, '');
             let formattedNumber = cleanNumber.padStart(15, '0');
@@ -303,23 +350,20 @@
             localStorage.setItem('attendance_name', name);
             localStorage.setItem('attendance_qr_type', 'number');
             localStorage.setItem('attendance_qr_value', formattedNumber);
-            localStorage.removeItem('attendance_qr_blob'); // 画像データは消す
+            localStorage.removeItem('attendance_qr_blob');
             localStorage.removeItem('attendance_qr_format');
             
-            alert('登録が完了しました！');
-            finishSetup();
+            showModal('登録完了！', '登録が完了しました！', true, finishSetup);
             return;
         }
 
-        // 更新時（すでにデータがある場合）の処理
         if (localStorage.getItem('attendance_qr_blob') || localStorage.getItem('attendance_qr_value')) {
             localStorage.setItem('attendance_name', name);
-            alert('名前を更新しました。');
-            finishSetup();
+            showModal('更新完了！', '名前を更新しました。', true, finishSetup);
             return;
         }
 
-        alert('写真をえらぶか、または8桁の数字を入力してください。');
+        showModal('入力エラー', '写真をえらぶか、または8桁の数字を入力してください。', false);
     }
 
     function finishSetup() {
